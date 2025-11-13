@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QAGIv2</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { height: 100%; font-family: Arial, sans-serif; display: flex; flex-direction: column; background: #f4f6f9; }
+        
+        .header {
+            background: #1a73e8;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header label { font-weight: bold; }
+        select {
+            padding: 6px 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            min-width: 10px;
+            background: white;
+            color: #333;
+        }
+        .token {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-weight: bold;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            border: 1px solid #4caf50;
+        }
+        .status {
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            min-width: 90px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .status.idle { background: #9e9e9e; color: white; }
+        .status.copied { background: #2e7d32; color: white; }
+        .status.failed { background: #d32f2f; color: white; }
+
+        .btn {
+            background: #34a853;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover { background: #2e7d32; }
+        .btn.remove { background: #d32f2f; }
+        .btn.remove:hover { background: #b71c1c; }
+
+        .iframe-container {
+            flex: 1;
+            display: grid;
+            gap: 8px;
+            padding: 8px;
+            overflow: hidden;
+        }
+
+        /* Layout rules */
+        .iframe-container.count-1 { grid-template-columns: 1fr; }
+        .iframe-container.count-2 { grid-template-columns: 1fr 1fr; }
+        .iframe-container.count-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .iframe-container.count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .iframe-container.count-5 {
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: auto auto;
+            grid-template-areas:
+                "a b c"
+                "d e .";
+        }
+        .iframe-container.count-5 iframe:nth-child(1) { grid-area: a; }
+        .iframe-container.count-5 iframe:nth-child(2) { grid-area: b; }
+        .iframe-container.count-5 iframe:nth-child(3) { grid-area: c; }
+        .iframe-container.count-5 iframe:nth-child(4) { grid-area: d; }
+        .iframe-container.count-5 iframe:nth-child(5) { grid-area: e; }
+
+        iframe {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: white;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <label for="currencySelect">Currency:</label>
+        <select id="currencySelect">
+            <option value="">All</option>
+            <option value="cny">CNY</option>
+            <option value="idr">IDR</option>
+            <option value="idr2">IDR2</option>
+            <option value="usd">USD</option>
+            <option value="krw">KRW</option>
+            <option value="rub">RUB</option>
+            <option value="try">TRY</option>
+            <option value="vnd">VND</option>
+            <option value="vnd2">VND2</option>
+            <option value="aud">AUD</option>
+            <option value="thb">THB</option>
+        </select>
+
+        <label for="loginSelect">Login:</label>
+        <select id="loginSelect">
+            <option value="">-- Select a login --</option>
+        </select>
+
+        <div id="tokenDisplay" class="token" style="display:none;"></div>
+        <div id="status" class="status idle">Ready</div>
+
+        <button id="addIframe" class="btn">+ Add Iframe</button>
+        <button id="removeIframe" class="btn remove" style="display:none;">- Remove Last</button>
+    </div>
+
+    <!-- Dynamic Iframe Container -->
+    <div id="iframeContainer" class="iframe-container count-1">
+        <iframe src="http://asia-dev:8082/operatorSimulation/" title="Simulation 1"></iframe>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- DATA + SCRIPT -->
+    <!-- ========================================================= -->
+    <script>
+        // === NXS Data (currency field added) ===
+        const data = [
+            {login:"NXSqa-cny-sw-001", token:"007f990b-0049-4005-9004-00190f0c57", currency:"cny"},
+            {login:"NXSqa-cny-sw-002", token:"0026333e-0059-4002-b005-001a42b16c", currency:"cny"},
+            {login:"NXSqa-cny-sw-003", token:"00305f8e-0046-4004-9006-0017d66d81", currency:"cny"},
+            {login:"NXSqa-cny-sw-004", token:"004a8245-0017-4005-b006-0045a83c36", currency:"cny"},
+            {login:"NXSqa-cny-sw-005", token:"001172f2-0046-4004-a002-0034409ddb", currency:"cny"},
+            {login:"NXSqa-cny-sw-006", token:"0056f285-000e-4006-9005-004ccafda3", currency:"cny"},
+            {login:"NXSqa-cny-sw-007", token:"003edb0b-0067-4003-b006-0010464a36", currency:"cny"},
+            {login:"NXSqa-cny-sw-008", token:"00070677-002d-4002-8002-003baafd85", currency:"cny"},
+            {login:"NXSqa-cny-sw-009", token:"005fdf6f-0072-4002-b003-005da9a48e", currency:"cny"},
+            {login:"NXSqa-cny-sw-010", token:"00779207-0011-4007-9006-005ee4fabe", currency:"cny"},
+            {login:"NXSqa-cny-sw-011", token:"0032b055-0002-4003-b000-00727d5625", currency:"cny"},
+            {login:"NXSqa-cny-sw-012", token:"0018f250-0010-4005-8001-00523239e8", currency:"cny"},
+            {login:"NXSqa-cny-sw-013", token:"0057e348-002e-4003-b004-003d2c7649", currency:"cny"},
+            {login:"NXSqa-cny-sw-014", token:"00015339-0031-4005-b000-00652e0127", currency:"cny"},
+            {login:"NXSqa-cny-sw-015", token:"0011ea42-004e-4006-8004-007de83374", currency:"cny"},
+            {login:"NXSqa-cny-sw-016", token:"002baff8-000e-4001-8004-0010a9a65d", currency:"cny"},
+            {login:"NXSqa-cny-sw-017", token:"001dc8f4-006e-4006-a006-0042ff8c01", currency:"cny"},
+            {login:"NXSqa-cny-sw-018", token:"000ddd37-0037-4002-9003-0005f0c3cf", currency:"cny"},
+            {login:"NXSqa-cny-sw-019", token:"005f82d1-0009-4003-8004-001d219939", currency:"cny"},
+            {login:"NXSqa-cny-sw-020", token:"004412fb-005f-4003-b006-003d05955c", currency:"cny"},
+            {login:"NXSqa-cny-sw-021", token:"00749522-006d-4006-9006-0057d6ff24", currency:"cny"},
+            {login:"NXSqa-idr-sw-001", token:"003e776c-0045-4004-a002-0061caa4a9", currency:"idr"},
+            {login:"NXSqa-idr-sw-002", token:"007a2cea-0070-4007-b004-004923e7f6", currency:"idr"},
+            {login:"NXSqa-idr-sw-003", token:"0020c2c2-0032-4003-9003-007e62d8a7", currency:"idr"},
+            {login:"NXSqa-idr-sw-004", token:"001b09cc-0010-4001-b005-002981fb7f", currency:"idr"},
+            {login:"NXSqa-idr-sw-005", token:"0053a411-0029-4007-8007-0050e04b6d", currency:"idr"},
+            {login:"NXSqa-idr-sw-006", token:"006b288c-004f-4007-9007-0068660b05", currency:"idr"},
+            {login:"NXSqa-idr-sw-007", token:"00184497-0059-4001-8007-001c16cf70", currency:"idr"},
+            {login:"NXSqa-idr-sw-008", token:"0053fdb1-005c-4001-a004-004770043f", currency:"idr"},
+            {login:"NXSqa-idr-sw-009", token:"003ea2bc-0026-4000-a002-006a71395f", currency:"idr"},
+            {login:"NXSqa-idr-sw-010", token:"0051aafc-0012-4001-a002-002473bd3f", currency:"idr"},
+            {login:"NXSqa-idr-sw-011", token:"006f15a6-0070-4005-8005-00532e5822", currency:"idr"},
+            {login:"NXSqa-idr-sw-012", token:"003189f2-0077-4005-a002-00332c483e", currency:"idr"},
+            {login:"NXSqa-idr-sw-013", token:"001db3f6-0010-4001-b000-00737c3217", currency:"idr"},
+            {login:"NXSqa-idr-sw-014", token:"006211f7-006a-4003-9000-002f327f6b", currency:"idr"},
+            {login:"NXSqa-idr-sw-015", token:"00666f12-003c-4004-9005-001a8c7230", currency:"idr"},
+            {login:"NXSqa-idr-sw-016", token:"000cd9c8-0007-4006-a003-00529f23fb", currency:"idr"},
+            {login:"NXSqa-idr-sw-017", token:"0010bad8-005d-4006-9004-0057e3b238", currency:"idr"},
+            {login:"NXSqa-idr-sw-018", token:"000563b3-0023-4006-b000-00463294a5", currency:"idr"},
+            {login:"NXSqa-idr-sw-019", token:"0076f507-0033-4002-a004-004f53546b", currency:"idr"},
+            {login:"NXSqa-idr-sw-020", token:"002c59c3-0055-4002-b000-002f14c68a", currency:"idr"},
+            {login:"NXSqa-idr-sw-021", token:"00475e1a-0041-4000-b004-0065ba99d6", currency:"idr"},
+            {login:"NXSqa-idr2-sw-001", token:"0005cb6c-0073-4001-9001-002d7f38e3", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-002", token:"00646780-0018-4003-9001-006422480b", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-003", token:"0068ffea-006f-4000-9004-002277c3f3", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-004", token:"004b391d-0060-4002-b001-004a622404", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-005", token:"0001b3ea-0027-4006-9002-000f76ca53", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-006", token:"003d9e4c-007f-4001-a004-0075e17322", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-007", token:"000c4e32-005b-4006-9005-002358afe2", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-008", token:"0033759c-0043-4004-8003-00412e9a2a", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-009", token:"002e7375-0012-4006-8003-0020e16ced", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-010", token:"00301cbd-0078-4003-9003-004405a7d8", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-011", token:"0061f791-0022-4001-9007-0023a0c7ef", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-012", token:"006e40d4-000a-4006-a004-00201afa57", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-013", token:"007f1f14-0068-4006-b006-003a899148", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-014", token:"000b90be-0053-4006-b000-007084a50c", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-015", token:"006e955d-0012-4007-b006-0074f39e62", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-016", token:"0039e71a-0011-4000-a002-004ffd5c9b", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-017", token:"00390688-0021-4003-8002-0068740e78", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-018", token:"005eec60-002f-4002-b007-00189968bc", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-019", token:"00249501-0044-4005-8004-003cfc8859", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-020", token:"00538102-0050-4007-9004-0057615506", currency:"idr2"},
+            {login:"NXSqa-idr2-sw-021", token:"00189466-004b-4006-9007-000743c794", currency:"idr2"},
+            {login:"NXSqa-usd-sw-001", token:"000fe7a9-0038-4000-8007-000d9d7eee", currency:"usd"},
+            {login:"NXSqa-usd-sw-002", token:"00521582-002c-4005-a000-000cfe0f8d", currency:"usd"},
+            {login:"NXSqa-usd-sw-003", token:"002814c3-0013-4002-8006-0028c5da5b", currency:"usd"},
+            {login:"NXSqa-usd-sw-004", token:"004808e9-000d-4004-a006-00604d12da", currency:"usd"},
+            {login:"NXSqa-usd-sw-005", token:"00275eb1-005f-4005-9001-0038266f8c", currency:"usd"},
+            {login:"NXSqa-usd-sw-006", token:"00104829-0030-4007-8007-007892c690", currency:"usd"},
+            {login:"NXSqa-usd-sw-007", token:"0059c918-0052-4006-8004-0043d9d889", currency:"usd"},
+            {login:"NXSqa-usd-sw-008", token:"00500187-0004-4001-a000-0037352deb", currency:"usd"},
+            {login:"NXSqa-usd-sw-009", token:"0000272f-0050-4002-b007-006f6b1ec-3", currency:"usd"},
+            {login:"NXSqa-usd-sw-010", token:"0026f6b4-0068-4005-a001-00152e87b3", currency:"usd"},
+            {login:"NXSqa-usd-sw-011", token:"003a3c11-001d-4002-b003-0002020733", currency:"usd"},
+            {login:"NXSqa-usd-sw-012", token:"00146b48-004e-4001-a006-00627ae2c0", currency:"usd"},
+            {login:"NXSqa-usd-sw-013", token:"0064ec01-0078-4007-9003-0022188573", currency:"usd"},
+            {login:"NXSqa-usd-sw-014", token:"0056e81b-0058-4003-a003-000690834a", currency:"usd"},
+            {login:"NXSqa-usd-sw-015", token:"0027918e-0069-4001-8004-0010390b98", currency:"usd"},
+            {login:"NXSqa-usd-sw-016", token:"001c9bc1-0014-4000-9005-00004d8e87", currency:"usd"},
+            {login:"NXSqa-usd-sw-017", token:"003e282e-001b-4003-8003-001b2d4d01", currency:"usd"},
+            {login:"NXSqa-usd-sw-018", token:"0054ba4b-001a-4005-9004-00434b8045", currency:"usd"},
+            {login:"NXSqa-usd-sw-019", token:"0032ad66-0002-4004-b005-00636eaf7b", currency:"usd"},
+            {login:"NXSqa-usd-sw-020", token:"006440f5-006d-4003-b007-000a28a5b2", currency:"usd"},
+            {login:"NXSqa-usd-sw-021", token:"0071c8fb-004e-4004-8005-00734417e8", currency:"usd"},
+            {login:"NXSqa-krw-sw-001", token:"001d378e-0023-4001-9001-00113041cf", currency:"krw"},
+            {login:"NXSqa-krw-sw-002", token:"007914c7-002b-4000-a006-000320b1bc", currency:"krw"},
+            {login:"NXSqa-krw-sw-003", token:"00434503-0074-4001-9007-00635fcaec", currency:"krw"},
+            {login:"NXSqa-krw-sw-004", token:"000c5844-0038-4002-b004-0046708b22", currency:"krw"},
+            {login:"NXSqa-krw-sw-005", token:"007624e8-002f-4001-a001-005d706303", currency:"krw"},
+            {login:"NXSqa-krw-sw-006", token:"000e7164-000e-4007-9003-004f243e84", currency:"krw"},
+            {login:"NXSqa-krw-sw-007", token:"004de4c1-0039-4005-8001-0077fa622b", currency:"krw"},
+            {login:"NXSqa-krw-sw-008", token:"0019709e-005f-4006-a002-0067f25c45", currency:"krw"},
+            {login:"NXSqa-krw-sw-009", token:"0026c8da-0001-4006-a007-006b3eb6e5", currency:"krw"},
+            {login:"NXSqa-krw-sw-010", token:"0039b4a3-0027-4002-8005-0074e7f697", currency:"krw"},
+            {login:"NXSqa-krw-sw-011", token:"0033bfde-0007-4006-9004-0019f61edd", currency:"krw"},
+            {login:"NXSqa-krw-sw-012", token:"002dbb0f-0011-4004-9000-0029c84c02-", currency:"krw"},
+            {login:"NXSqa-krw-sw-013", token:"006b6568-005a-4001-8001-000ec0a621", currency:"krw"},
+            {login:"NXSqa-krw-sw-014", token:"002e62e7-0030-4005-9006-00196b3d12", currency:"krw"},
+            {login:"NXSqa-krw-sw-015", token:"0048af19-0037-4006-a003-000bf2e7ac", currency:"krw"},
+            {login:"NXSqa-krw-sw-016", token:"00440c35-0001-4004-a001-005259f462", currency:"krw"},
+            {login:"NXSqa-krw-sw-017", token:"0021fbbc-0038-4000-8007-00609c98f1", currency:"krw"},
+            {login:"NXSqa-krw-sw-018", token:"0041d5ef-003b-4002-a004-001870b6b6", currency:"krw"},
+            {login:"NXSqa-krw-sw-019", token:"002381ef-0017-4002-9000-006ec6113f", currency:"krw"},
+            {login:"NXSqa-krw-sw-020", token:"00248346-006b-4004-b006-006bb63614", currency:"krw"},
+            {login:"NXSqa-krw-sw-021", token:"005a16f9-0069-4006-8007-00516514a6", currency:"krw"},
+            {login:"NXSqa-rub-sw-001", token:"0003ddbf-000d-4001-8002-000bc24e2a", currency:"rub"},
+            {login:"NXSqa-rub-sw-002", token:"0010a2c0-006c-4001-8007-0066df9392", currency:"rub"},
+            {login:"NXSqa-rub-sw-003", token:"007f0579-005a-4003-a005-004771c724", currency:"rub"},
+            {login:"NXSqa-rub-sw-004", token:"00054707-0060-4001-a000-002fbc601f", currency:"rub"},
+            {login:"NXSqa-rub-sw-005", token:"003e102a-0047-4004-a005-0073ef303a", currency:"rub"},
+            {login:"NXSqa-rub-sw-006", token:"0070c87b-0042-4005-b000-0057d00ff6", currency:"rub"},
+            {login:"NXSqa-rub-sw-007", token:"005bccfb-006d-4002-8002-0000455954", currency:"rub"},
+            {login:"NXSqa-rub-sw-008", token:"0055a5a4-0025-4004-9002-004c31b22a", currency:"rub"},
+            {login:"NXSqa-rub-sw-009", token:"005bbb91-0020-4004-9002-0002d23cac", currency:"rub"},
+            {login:"NXSqa-rub-sw-010", token:"005e574b-0045-4002-9000-0000329903", currency:"rub"},
+            {login:"NXSqa-rub-sw-011", token:"00004e81-0001-4002-9006-0007e3be1c", currency:"rub"},
+            {login:"NXSqa-rub-sw-012", token:"0070f07c-005c-4006-8004-0050a72993", currency:"rub"},
+            {login:"NXSqa-rub-sw-013", token:"003848df-002f-4000-8006-005afdf286", currency:"rub"},
+            {login:"NXSqa-rub-sw-014", token:"00638aad-0062-4001-8007-004d911a54", currency:"rub"},
+            {login:"NXSqa-rub-sw-015", token:"000ee30c-006d-4000-8002-006d29bea9", currency:"rub"},
+            {login:"NXSqa-rub-sw-016", token:"0027fd57-0023-4001-8002-004a106608", currency:"rub"},
+            {login:"NXSqa-rub-sw-017", token:"0077d6e8-0064-4000-a000-005bccead9", currency:"rub"},
+            {login:"NXSqa-rub-sw-018", token:"007b8a88-005c-4007-a003-004456602f", currency:"rub"},
+            {login:"NXSqa-rub-sw-019", token:"0027d44a-0041-4006-a001-000d08e5e1", currency:"rub"},
+            {login:"NXSqa-rub-sw-020", token:"0032a17e-0070-4001-8000-0011891748", currency:"rub"},
+            {login:"NXSqa-rub-sw-021", token:"001ab9ff-0037-4004-9007-001240bfa6", currency:"rub"},
+            {login:"NXSqa-try-sw-001", token:"001ab78f-0030-4004-b006-00224f63f0", currency:"try"},
+            {login:"NXSqa-try-sw-002", token:"007f3107-0068-4003-9003-00349ccb53", currency:"try"},
+            {login:"NXSqa-try-sw-003", token:"0011e77a-0049-4002-9006-0038829da2", currency:"try"},
+            {login:"NXSqa-try-sw-004", token:"001fdf27-0075-4001-b004-00508dc0a5", currency:"try"},
+            {login:"NXSqa-try-sw-005", token:"004778b1-0022-4001-9004-000ce73989", currency:"try"},
+            {login:"NXSqa-try-sw-006", token:"0011f255-001f-4000-8002-00184b670e", currency:"try"},
+            {login:"NXSqa-try-sw-007", token:"00195a3b-0028-4002-8006-0063eacfe2", currency:"try"},
+            {login:"NXSqa-try-sw-008", token:"003e5a4e-005f-4003-8002-000db5ccd7", currency:"try"},
+            {login:"NXSqa-try-sw-009", token:"00590679-0045-4002-9000-003e412b93", currency:"try"},
+            {login:"NXSqa-try-sw-010", token:"001d317f-0053-4007-b004-006715cf62", currency:"try"},
+            {login:"NXSqa-try-sw-011", token:"0050c962-0011-4000-a000-002370360a", currency:"try"},
+            {login:"NXSqa-try-sw-012", token:"003317cd-0078-4005-9000-007c6452d1", currency:"try"},
+            {login:"NXSqa-try-sw-013", token:"005497cd-0061-4005-9006-005b5c039d", currency:"try"},
+            {login:"NXSqa-try-sw-014", token:"0021bc72-0020-4005-9002-002f790d60", currency:"try"},
+            {login:"NXSqa-try-sw-015", token:"004ea60d-0050-4000-9007-0064489049", currency:"try"},
+            {login:"NXSqa-try-sw-016", token:"00313597-0015-4006-8005-0016efce90", currency:"try"},
+            {login:"NXSqa-try-sw-017", token:"00075b05-000e-4005-b000-004e61fdea", currency:"try"},
+            {login:"NXSqa-try-sw-018", token:"0011517a-007b-4006-a002-0015e95b53", currency:"try"},
+            {login:"NXSqa-try-sw-019", token:"0062e527-0041-4004-b006-005d453179", currency:"try"},
+            {login:"NXSqa-try-sw-020", token:"0048633d-007d-4004-b006-00097a1016", currency:"try"},
+            {login:"NXSqa-try-sw-021", token:"003f27a5-007e-4000-8000-00171275c2", currency:"try"},
+            {login:"NXSqa-vnd-sw-001", token:"00135421-0032-4000-a005-000e13258a", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-002", token:"007305fa-006f-4002-b004-0034be4de8", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-003", token:"003a9d97-006b-4001-a004-0070155404", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-004", token:"00418dc1-0006-4001-a005-00738f4f6b", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-005", token:"00728a41-0039-4000-9006-007f497798", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-006", token:"001a8b8c-007d-4003-a005-0054209a80", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-007", token:"005c037f-0055-4003-a004-006235bc9f", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-008", token:"0057791c-0072-4006-8001-002f230177", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-009", token:"0006709b-007d-4000-8003-00350a9038", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-010", token:"00238326-0020-4007-b006-0072976920", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-011", token:"000d5c9d-0027-4006-a000-0076b4d323", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-012", token:"00609db3-0016-4006-a004-007fd0724e", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-013", token:"00722068-006a-4000-9005-00496d07a1", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-014", token:"003b93b2-0013-4003-8000-0015ced2c3", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-015", token:"00345407-0077-4002-9000-003fce80c3", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-016", token:"00618931-0031-4005-9004-00305b3f2b", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-017", token:"0058ea8f-0038-4000-b006-0051c2202c", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-018", token:"002ef373-0007-4006-b001-00090d15c0", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-019", token:"00018868-0020-4004-b007-001b117162", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-020", token:"00233769-003e-4001-a007-007145e36e", currency:"vnd"},
+            {login:"NXSqa-vnd-sw-021", token:"004919ad-007f-4006-b006-001b5068a5", currency:"vnd"},
+            {login:"NXSqa-vnd2-sw-001", token:"00302bb1-004b-4004-b000-0042e3f2fd", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-002", token:"001b2f27-0015-4007-a007-0058272c3a", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-003", token:"00612417-004d-4001-b006-000a0fdbd7", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-004", token:"005b42f0-0004-4007-9006-005ae560ee", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-005", token:"0021a122-0070-4003-a006-00750b1737", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-006", token:"00498e48-0020-4003-8007-0063bcc089", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-007", token:"00340ef7-0066-4004-9001-007b67df74", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-008", token:"0042ea45-0042-4000-8000-007a71be25", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-009", token:"0018c9f8-006d-4000-8002-0049ce118f", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-010", token:"0009ca36-002e-4005-9001-001c528394", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-011", token:"004dd8db-0051-4004-9004-007ef06dc3", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-012", token:"003be3ec-0015-4003-b006-0002de7d32", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-013", token:"000ea7fc-001e-4003-9002-0023b79a3e", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-014", token:"0055571f-0077-4005-b001-004183dbee", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-015", token:"003ed928-0040-4003-8001-000df7cd3a", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-016", token:"00000f44-0066-4006-9001-004e2d7946", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-017", token:"007a584d-0078-4005-b007-00255b432c", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-018", token:"0002afc4-0058-4003-b000-007e4088cd", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-019", token:"0059e988-0034-4002-b003-005001f926", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-020", token:"002229a0-0071-4001-a001-001fde1cf9", currency:"vnd2"},
+            {login:"NXSqa-vnd2-sw-021", token:"000f075f-0044-4000-8004-0029df4f85", currency:"vnd2"},
+            {login:"NXSqa-aud-sw-001", token:"00107b1a-0044-4001-a004-0024483756", currency:"aud"},
+            {login:"NXSqa-aud-sw-002", token:"0070ea95-0071-4000-9005-002f1d14f8", currency:"aud"},
+            {login:"NXSqa-aud-sw-003", token:"0028a85b-0064-4006-a006-00421f0bd3", currency:"aud"},
+            {login:"NXSqa-aud-sw-004", token:"005058e2-0055-4005-9004-006768a9d7", currency:"aud"},
+            {login:"NXSqa-aud-sw-005", token:"0076b837-0039-4003-9007-00019c4e6a", currency:"aud"},
+            {login:"NXSqa-thb-sw-001", token:"0014ccb6-0017-4001-a006-003539b91a", currency:"thb"},
+            {login:"NXSqa-thb-sw-002", token:"0073d0e9-002d-4003-9000-0044c4f667", currency:"thb"},
+            {login:"NXSqa-thb-sw-003", token:"0072a226-0047-4003-b006-0055d775d3", currency:"thb"},
+            {login:"NXSqa-thb-sw-004", token:"00520694-006b-4000-9001-0060a4465d", currency:"thb"},
+            {login:"NXSqa-thb-sw-005", token:"0039c8d1-006e-4003-a005-00473b921d", currency:"thb"}
+        ];
+
+        // Elements
+        const currencySelect = document.getElementById('currencySelect');
+        const loginSelect = document.getElementById('loginSelect');
+        const tokenDisplay = document.getElementById('tokenDisplay');
+        const status = document.getElementById('status');
+        const container = document.getElementById('iframeContainer');
+        const addBtn = document.getElementById('addIframe');
+        const removeBtn = document.getElementById('removeIframe');
+        const url = 'http://asia-dev:8082/operatorSimulation/';
+
+        // Populate login dropdown based on currency
+        function filterLogins() {
+            const cur = currencySelect.value;
+            loginSelect.innerHTML = '<option value="">-- Select a login --</option>';
+
+            const list = cur ? data.filter(i => i.currency === cur) : data;
+            list.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.login;
+                opt.textContent = item.login;
+                opt.dataset.token = item.token;
+                loginSelect.appendChild(opt);
+            });
+
+            tokenDisplay.style.display = 'none';
+            status.textContent = 'Ready';
+            status.className = 'status idle';
+        }
+
+        // Auto-copy token
+        loginSelect.addEventListener('change', () => {
+            const token = loginSelect.selectedOptions[0]?.dataset.token || '';
+            if (token) {
+                tokenDisplay.textContent = token;
+                tokenDisplay.style.display = 'block';
+                navigator.clipboard.writeText(token).then(() => {
+                    status.textContent = 'Copied!';
+                    status.className = 'status copied';
+                    setTimeout(() => {
+                        status.textContent = 'Ready';
+                        status.className = 'status idle';
+                    }, 1500);
+                }).catch(() => {
+                    status.textContent = 'Failed';
+                    status.className = 'status failed';
+                });
+            } else {
+                tokenDisplay.style.display = 'none';
+            }
+        });
+
+        // Currency change → filter
+        currencySelect.addEventListener('change', filterLogins);
+
+        // Initial fill
+        filterLogins();
+
+        // Iframe add/remove
+        function updateLayout() {
+            const cnt = container.children.length;
+            container.className = `iframe-container count-${Math.min(cnt, 5)}`;
+            removeBtn.style.display = cnt > 1 ? 'flex' : 'none';
+        }
+
+        addBtn.addEventListener('click', () => {
+            const iframe = document.createElement('iframe');
+            iframe.src = url;
+            iframe.title = `Simulation ${container.children.length + 1}`;
+            container.appendChild(iframe);
+            updateLayout();
+        });
+
+        removeBtn.addEventListener('click', () => {
+            if (container.children.length > 1) {
+                container.removeChild(container.lastElementChild);
+                updateLayout();
+            }
+        });
+
+        updateLayout();
+    </script>
+</body>
+</html>
